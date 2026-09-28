@@ -1,6 +1,9 @@
 import asyncio
 import logging
 import os
+import threading
+from flask import Flask
+
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -9,9 +12,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from openai import AsyncOpenAI
 
 # --- КОНФИГУРАЦИЯ ---
-# Токен берем из переменных окружения (так безопаснее)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-# Ключ OpenRouter
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # Подключаемся к OpenRouter
@@ -20,7 +21,7 @@ client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1"
 )
 
-# Наш системный промпт (оставляем тот же, что обсуждали)
+# --- СИСТЕМНЫЙ ПРОМПТ ---
 SYSTEM_PROMPT = """
 Ты — Сократический помощник по физике для учеников 7 и 9 классов.
 Тема: Механика.
@@ -48,6 +49,22 @@ SYSTEM_PROMPT = """
 Шаг 6. Проверить результат (размерность, здравый смысл).
 """
 
+# --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
+app = Flask(__name__)
+
+@app.route('/')
+def health():
+    return "Bot is running"
+
+@app.route('/health')
+def health_check():
+    return "OK"
+
+def run_flask():
+    port = int(os.getenv("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+# --- НАСТРОЙКА БОТА ---
 logging.basicConfig(level=logging.INFO)
 storage = MemoryStorage()
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -89,10 +106,8 @@ async def handle_dialog(message: types.Message, state: FSMContext):
     ]
 
     try:
-        # Используем бесплатную модель. Можно попробовать "deepseek/deepseek-r1:free"
-        # Если она не работает, можно заменить на "google/gemma-3-27b-it:free"
         response = await client.chat.completions.create(
-            model="deepseek/deepseek-r1:free", 
+            model="deepseek/deepseek-r1:free",
             messages=messages_for_api,
             stream=False,
             temperature=0.7,
@@ -108,4 +123,5 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
+    threading.Thread(target=run_flask, daemon=True).start()
     asyncio.run(main())
