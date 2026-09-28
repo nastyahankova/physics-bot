@@ -23,7 +23,7 @@ client = AsyncOpenAI(
 )
 
 # --- МОДЕЛЬ ---
-MODEL_NAME = "qwen/qwen3.8-27b:free"
+MODEL_NAME = "openrouter/free"
 
 # --- ПАМЯТЬ ДИАЛОГОВ ---
 MAX_HISTORY = 15
