@@ -10,7 +10,11 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardRemove,
+)
 from openai import AsyncOpenAI
 
 # --- КОНФИГУРАЦИЯ ---
@@ -133,28 +137,24 @@ class PhysicsBotStates(StatesGroup):
 
 # --- КЛАВИАТУРЫ ---
 def grade_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="7️⃣ 7 класс", callback_data="grade_7"),
-            InlineKeyboardButton(text="9️⃣ 9 класс", callback_data="grade_9"),
-        ]
-    ])
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="7️⃣ 7 класс"), KeyboardButton(text="9️⃣ 9 класс")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
 
 def control_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="💡 Подсказка", callback_data="hint"),
-            InlineKeyboardButton(text="❓ Я не понимаю", callback_data="rephrase"),
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="💡 Подсказка"), KeyboardButton(text="❓ Я не понимаю")],
+            [KeyboardButton(text="📖 Теория"), KeyboardButton(text="✅ Задача решена")],
+            [KeyboardButton(text="🔄 Новая задача"), KeyboardButton(text="🎓 Сменить класс")],
         ],
-        [
-            InlineKeyboardButton(text="📖 Теория", callback_data="theory"),
-            InlineKeyboardButton(text="✅ Задача решена", callback_data="done"),
-        ],
-        [
-            InlineKeyboardButton(text="🔄 Новая задача", callback_data="new_task"),
-            InlineKeyboardButton(text="🎓 Сменить класс", callback_data="change_grade"),
-        ],
-    ])
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
 # --- КОМАНДА /start ---
 @dp.message(Command("start"))
@@ -190,75 +190,76 @@ async def cmd_help(message: types.Message):
     )
 
 # --- ВЫБОР КЛАССА ---
-@dp.callback_query(F.data.startswith("grade_"))
-async def process_grade_button(callback: types.CallbackQuery, state: FSMContext):
-    grade = callback.data.split("_")[1]
-
-    await state.update_data(grade=grade)
-    reset_history(callback.from_user.id)
-
-    await callback.message.edit_reply_markup(reply_markup=None)
-
-    await callback.message.answer(
-        f"Отлично, ты в {grade} классе! 🎓\n\n"
-        "Пришли мне задачу по механике — и давай начнём разбираться. 🚀"
+@dp.message(F.text == "7️⃣ 7 класс")
+async def btn_grade_7(message: types.Message, state: FSMContext):
+    await state.update_data(grade="7")
+    reset_history(message.from_user.id)
+    await message.answer(
+        "Отлично, ты в 7 классе! 🎓\n\n"
+        "Пришли мне задачу по механике — и давай начнём разбираться. 🚀",
+        reply_markup=control_keyboard()
     )
     await state.set_state(PhysicsBotStates.in_dialog)
-    await callback.answer()
+
+@dp.message(F.text == "9️⃣ 9 класс")
+async def btn_grade_9(message: types.Message, state: FSMContext):
+    await state.update_data(grade="9")
+    reset_history(message.from_user.id)
+    await message.answer(
+        "Отлично, ты в 9 классе! 🎓\n\n"
+        "Пришли мне задачу по механике — и давай начнём разбираться. 🚀",
+        reply_markup=control_keyboard()
+    )
+    await state.set_state(PhysicsBotStates.in_dialog)
 
 # --- КНОПКИ УПРАВЛЕНИЯ ---
-@dp.callback_query(F.data == "new_task")
-async def cb_new_task(callback: types.CallbackQuery, state: FSMContext):
-    reset_history(callback.from_user.id)
-    await callback.message.answer(
+@dp.message(F.text == "🔄 Новая задача")
+async def btn_new_task(message: types.Message, state: FSMContext):
+    reset_history(message.from_user.id)
+    await message.answer(
         "🔄 Начинаем новую задачу!\n\n"
         "Пришли мне условие — и разберёмся вместе. 🚀",
         reply_markup=control_keyboard()
     )
     await state.set_state(PhysicsBotStates.in_dialog)
-    await callback.answer()
 
-@dp.callback_query(F.data == "change_grade")
-async def cb_change_grade(callback: types.CallbackQuery, state: FSMContext):
-    reset_history(callback.from_user.id)
-    await callback.message.answer(
+@dp.message(F.text == "🎓 Сменить класс")
+async def btn_change_grade(message: types.Message, state: FSMContext):
+    reset_history(message.from_user.id)
+    await message.answer(
         "🎓 Хорошо, давай сменим класс. В каком ты классе?",
         reply_markup=grade_keyboard()
     )
     await state.set_state(PhysicsBotStates.choosing_grade)
-    await callback.answer()
 
-@dp.callback_query(F.data.in_({"hint", "rephrase", "theory", "done"}))
-async def cb_control_buttons(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
+@dp.message(F.text == "✅ Задача решена")
+async def btn_done(message: types.Message, state: FSMContext):
+    reset_history(message.from_user.id)
+    await message.answer(
+        "🎉 Отлично! Рад был помочь.\n\n"
+        "Когда понадобится моя помощь — просто нажми /start! 👋",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    await state.clear()
+
+@dp.message(F.text.in_({"💡 Подсказка", "❓ Я не понимаю", "📖 Теория"}))
+async def btn_control(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
     user_data = await state.get_data()
     grade = user_data.get("grade", "7")
 
-    # --- Кнопка "Задача решена" — завершение ---
-    if callback.data == "done":
-        reset_history(user_id)
-        await callback.message.answer(
-            "🎉 Отлично! Рад был помочь.\n\n"
-            "Когда понадобится моя помощь — просто нажми /start! 👋",
-            reply_markup=None
-        )
-        await state.clear()
-        await callback.answer()
-        return
-
-    # --- Инструкции для остальных кнопок ---
-    if callback.data == "hint":
+    if message.text == "💡 Подсказка":
         instruction = (
             "Ученик просит ПОДСКАЗКУ. Не давай ответ! "
             "Дай небольшую подсказку — намекни на формулу или на следующий шаг, "
             "но так, чтобы ученик сам подумал. Используй эмодзи 💡."
         )
-    elif callback.data == "rephrase":
+    elif message.text == "❓ Я не понимаю":
         instruction = (
             "Ученик не понимает. Переформулируй свой последний вопрос ПРОЩЕ, "
             "другими словами. Не давай ответ. Один вопрос за раз."
         )
-    else:  # theory
+    else:  # Теория
         instruction = (
             "Ученик просит ТЕОРИЮ по теме задачи. Расскажи простыми словами, "
             "что это за явление или величина, от чего зависит, где встречается в жизни. "
@@ -272,7 +273,7 @@ async def cb_control_buttons(callback: types.CallbackQuery, state: FSMContext):
     messages_for_api.append({"role": "user", "content": f"[{instruction}]"})
 
     try:
-        await callback.message.answer("⏳ Секунду...")
+        await message.answer("⏳ Секунду...")
         response = await client.chat.completions.create(
             model=MODEL_NAME,
             messages=messages_for_api,
@@ -284,13 +285,12 @@ async def cb_control_buttons(callback: types.CallbackQuery, state: FSMContext):
         history.append({"role": "user", "content": instruction})
         history.append({"role": "assistant", "content": bot_reply})
 
-        await callback.message.answer(bot_reply, reply_markup=control_keyboard())
+        await message.answer(bot_reply)
     except Exception as e:
         logging.error(f"Ошибка при обращении к OpenRouter: {e}")
-        await callback.message.answer(
+        await message.answer(
             "Ой, что-то заклинило. 😅 Попробуй ещё раз через минуту."
         )
-    await callback.answer()
 
 # --- ОСНОВНОЙ ДИАЛОГ ---
 @dp.message(PhysicsBotStates.in_dialog, F.text)
@@ -321,7 +321,7 @@ async def handle_dialog(message: types.Message, state: FSMContext):
         history.append({"role": "user", "content": user_message})
         history.append({"role": "assistant", "content": bot_reply})
 
-        await message.answer(bot_reply, reply_markup=control_keyboard())
+        await message.answer(bot_reply)
     except Exception as e:
         logging.error(f"Ошибка при обращении к OpenRouter: {e}")
         await message.answer(
