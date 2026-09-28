@@ -22,14 +22,16 @@ client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1"
 )
 
+# --- МОДЕЛЬ ---
+MODEL_NAME = "qwen/qwen3.8-27b:free"
+
 # --- ПАМЯТЬ ДИАЛОГОВ ---
-# Для каждого пользователя храним последние 15 сообщений (user + assistant)
 MAX_HISTORY = 15
-user_histories = {}  # {user_id: deque([...])}
+user_histories = {}
 
 def get_history(user_id: int):
     if user_id not in user_histories:
-        user_histories[user_id] = deque(maxlen=MAX_HISTORY * 2)  # *2, т.к. user + assistant
+        user_histories[user_id] = deque(maxlen=MAX_HISTORY * 2)
     return user_histories[user_id]
 
 def reset_history(user_id: int):
@@ -80,6 +82,7 @@ SYSTEM_PROMPT = """
 ❌ «(½)·2·3^2 = 9 Дж»
 ❌ «Какой единицей измеряется энергия? Кстати, это Джоули.»
 """
+
 # --- ВЕБ-СЕРВЕР ДЛЯ RENDER ---
 app = Flask(__name__)
 
@@ -204,7 +207,7 @@ async def cb_hint_or_rephrase(callback: types.CallbackQuery, state: FSMContext):
 
     if callback.data == "hint":
         instruction = "Ученик просит ПОДСКАЗКУ. Не давай ответ! Дай небольшую подсказку — намекни на формулу или на следующий шаг, но так, чтобы ученик сам подумал. Используй эмодзи 💡."
-    else:  # rephrase
+    else:
         instruction = "Ученик не понимает. Переформулируй свой последний вопрос ПРОЩЕ, другими словами. Не давай ответ. Один вопрос за раз."
 
     history = get_history(user_id)
@@ -215,7 +218,7 @@ async def cb_hint_or_rephrase(callback: types.CallbackQuery, state: FSMContext):
     try:
         await callback.message.answer("⏳ Секунду...")
         response = await client.chat.completions.create(
-            model="openrouter/free",
+            model=MODEL_NAME,
             messages=messages_for_api,
             stream=False,
             temperature=0.7,
@@ -252,7 +255,7 @@ async def handle_dialog(message: types.Message, state: FSMContext):
 
     try:
         response = await client.chat.completions.create(
-            model="openrouter/free",
+            model=MODEL_NAME,
             messages=messages_for_api,
             stream=False,
             temperature=0.7,
