@@ -93,9 +93,10 @@ class PhysicsBotStates(StatesGroup):
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer(
-        "Привет! Я Сократический помощник по физике. "
-        "Я не даю готовых ответов, а помогаю тебе самому дойти до решения задач по механике.\n\n"
-        "В каком ты классе? Напиши «7» или «9»."
+        "👋 Привет! Я — «Умный Физик», твой Сократический помощник.\n\n"
+        "Я не даю готовых ответов — я помогаю тебе самому дойти до решения задач по механике. "
+        "Будем думать вместе! 🤝\n\n"
+        "📚 В каком ты классе? Напиши «7» или «9»."
     )
     await state.set_state(PhysicsBotStates.choosing_grade)
 
@@ -104,10 +105,15 @@ async def process_grade_choice(message: types.Message, state: FSMContext):
     text = message.text.strip()
     if text in ["7", "9"]:
         await state.update_data(grade=text)
-        await message.answer(f"Отлично, ты в {text} классе. Пришли мне задачу по механике, и давай начнём.")
+        await message.answer(
+            f"Отлично, ты в {text} классе! 🎓\n\n"
+            "Пришли мне задачу по механике — и давай начнём разбираться. 🚀"
+        )
         await state.set_state(PhysicsBotStates.in_dialog)
     else:
-        await message.answer("Пожалуйста, напиши только «7» или «9».")
+        await message.answer(
+            "Пожалуйста, напиши только «7» или «9» 🙂"
+        )
 
 @dp.message(PhysicsBotStates.in_dialog, F.text)
 async def handle_dialog(message: types.Message, state: FSMContext):
@@ -131,7 +137,10 @@ async def handle_dialog(message: types.Message, state: FSMContext):
         await message.answer(bot_reply)
     except Exception as e:
         logging.error(f"Ошибка при обращении к OpenRouter: {e}")
-        await message.answer("Извини, произошла ошибка на стороне ИИ. Попробуй ещё раз.")
+        await message.answer(
+            "Ой, кажется, у меня что-то заклинило. 😅 "
+            "Попробуй написать ещё раз через минуту."
+        )
 
 async def main():
     print("Бот запущен...")
