@@ -9,6 +9,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from openai import AsyncOpenAI
 
 # --- КОНФИГУРАЦИЯ ---
@@ -49,7 +50,6 @@ SYSTEM_PROMPT = """
 🤔 — подумай
 💡 — подсказка
 ✅ — верно
-❌ — не совсем (но не пиши это слово, просто задай вопрос)
 🎯 — цель
 🚀 — успех
 💪 — поддержка
@@ -89,32 +89,45 @@ class PhysicsBotStates(StatesGroup):
     choosing_grade = State()
     in_dialog = State()
 
+# --- ОБРАБОТЧИК КОМАНДЫ /start ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="7️⃣ 7 класс", callback_data="grade_7"),
+            InlineKeyboardButton(text="9️⃣ 9 класс", callback_data="grade_9"),
+        ]
+    ])
+
     await message.answer(
         "👋 Привет! Я — «Умный Физик», твой Сократический помощник.\n\n"
         "Я не даю готовых ответов — я помогаю тебе самому дойти до решения задач по механике. "
         "Будем думать вместе! 🤝\n\n"
-        "📚 В каком ты классе? Напиши «7» или «9»."
+        "📚 В каком ты классе?",
+        reply_markup=keyboard
     )
     await state.set_state(PhysicsBotStates.choosing_grade)
 
-@dp.message(PhysicsBotStates.choosing_grade)
-async def process_grade_choice(message: types.Message, state: FSMContext):
-    text = message.text.strip()
-    if text in ["7", "9"]:
-        await state.update_data(grade=text)
-        await message.answer(
-            f"Отлично, ты в {text} классе! 🎓\n\n"
-            "Пришли мне задачу по механике — и давай начнём разбираться. 🚀"
-        )
-        await state.set_state(PhysicsBotStates.in_dialog)
-    else:
-        await message.answer(
-            "Пожалуйста, напиши только «7» или «9» 🙂"
-        )
+# --- ОБРАБОТЧИК НАЖАТИЯ НА КНОПКУ КЛАССА ---
+@dp.callback_query(F.data.startswith("grade_"))
+async def process_grade_button(callback: types.CallbackQuery, state: FSMContext):
+    grade = callback.data.split("_")[1]
 
+    await state.update_data(grade=grade)
+
+    # Убираем кнопки, чтобы не нажимали повторно
+    await callback.message.edit_reply_markup(reply_markup=None)
+
+    await callback.message.answer(
+        f"Отлично, ты в {grade} классе! 🎓\n\n"
+        "Пришли мне задачу по механике — и давай начнём разбираться. 🚀"
+    )
+    await state.set_state(PhysicsBotStates.in_dialog)
+    await callback.answer()
+
+# --- ОБРАБОТЧИК ДИАЛОГА ПО ЗАДАЧЕ ---
 @dp.message(PhysicsBotStates.in_dialog, F.text)
 async def handle_dialog(message: types.Message, state: FSMContext):
     user_message = message.text
@@ -142,6 +155,7 @@ async def handle_dialog(message: types.Message, state: FSMContext):
             "Попробуй написать ещё раз через минуту."
         )
 
+# --- ЗАПУСК ---
 async def main():
     print("Бот запущен...")
     await dp.start_polling(bot)
