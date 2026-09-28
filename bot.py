@@ -124,6 +124,10 @@ def control_keyboard():
             InlineKeyboardButton(text="❓ Я не понимаю", callback_data="rephrase"),
         ],
         [
+            InlineKeyboardButton(text="📖 Теория", callback_data="theory"),
+            InlineKeyboardButton(text="✅ Задача решена", callback_data="done"),
+        ],
+        [
             InlineKeyboardButton(text="🔄 Новая задача", callback_data="new_task"),
             InlineKeyboardButton(text="🎓 Сменить класс", callback_data="change_grade"),
         ],
@@ -155,7 +159,9 @@ async def cmd_help(message: types.Message):
         "<b>Кнопки управления:</b>\n"
         "💡 <b>Подсказка</b> — небольшая подсказка (не ответ)\n"
         "❓ <b>Я не понимаю</b> — переформулирую вопрос проще\n"
-        "🔄 <b>Новая задача</b> — начнём заново\n"
+        "📖 <b>Теория</b> — объясню тему простыми словами\n"
+        "✅ <b>Задача решена</b> — завершить работу\n"
+        "🔄 <b>Новая задача</b> — сбросить диалог\n"
         "🎓 <b>Сменить класс</b> — выбрать 7 или 9 класс\n\n"
         "⚡ Важно: я не решаю задачи за тебя. Я помогаю тебе решить самому!",
         parse_mode="HTML"
@@ -184,7 +190,8 @@ async def cb_new_task(callback: types.CallbackQuery, state: FSMContext):
     reset_history(callback.from_user.id)
     await callback.message.answer(
         "🔄 Начинаем новую задачу!\n\n"
-        "Пришли мне условие — и разберёмся вместе. 🚀"
+        "Пришли мне условие — и разберёмся вместе. 🚀",
+        reply_markup=control_keyboard()
     )
     await state.set_state(PhysicsBotStates.in_dialog)
     await callback.answer()
@@ -199,16 +206,43 @@ async def cb_change_grade(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(PhysicsBotStates.choosing_grade)
     await callback.answer()
 
-@dp.callback_query(F.data.in_({"hint", "rephrase"}))
-async def cb_hint_or_rephrase(callback: types.CallbackQuery, state: FSMContext):
+@dp.callback_query(F.data.in_({"hint", "rephrase", "theory", "done"}))
+async def cb_control_buttons(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     user_data = await state.get_data()
     grade = user_data.get("grade", "7")
 
+    # --- Кнопка "Задача решена" — завершение ---
+    if callback.data == "done":
+        reset_history(user_id)
+        await callback.message.answer(
+            "🎉 Отлично! Рад был помочь.\n\n"
+            "Когда понадобится моя помощь — просто нажми /start! 👋",
+            reply_markup=None
+        )
+        await state.clear()
+        await callback.answer()
+        return
+
+    # --- Инструкции для остальных кнопок ---
     if callback.data == "hint":
-        instruction = "Ученик просит ПОДСКАЗКУ. Не давай ответ! Дай небольшую подсказку — намекни на формулу или на следующий шаг, но так, чтобы ученик сам подумал. Используй эмодзи 💡."
-    else:
-        instruction = "Ученик не понимает. Переформулируй свой последний вопрос ПРОЩЕ, другими словами. Не давай ответ. Один вопрос за раз."
+        instruction = (
+            "Ученик просит ПОДСКАЗКУ. Не давай ответ! "
+            "Дай небольшую подсказку — намекни на формулу или на следующий шаг, "
+            "но так, чтобы ученик сам подумал. Используй эмодзи 💡."
+        )
+    elif callback.data == "rephrase":
+        instruction = (
+            "Ученик не понимает. Переформулируй свой последний вопрос ПРОЩЕ, "
+            "другими словами. Не давай ответ. Один вопрос за раз."
+        )
+    else:  # theory
+        instruction = (
+            "Ученик просит ТЕОРИЮ по теме задачи. Расскажи простыми словами, "
+            "что это за явление или величина, от чего зависит, где встречается в жизни. "
+            "НЕ решай задачу и НЕ подставляй числа. Не уходи в длинную лекцию — 4–5 предложений. "
+            "В конце спроси: «Теперь понятнее? Продолжим задачу?» 📖"
+        )
 
     history = get_history(user_id)
     messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
