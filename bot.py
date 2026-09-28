@@ -141,7 +141,7 @@ async def handle_dialog(message: types.Message, state: FSMContext):
 
     try:
         response = await client.chat.completions.create(
-            model="deepseek/deepseek-r1:free",
+            model="google/gemma-3-27b-it:free",
             messages=messages_for_api,
             stream=False,
             temperature=0.7,
